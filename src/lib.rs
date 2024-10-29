@@ -6,6 +6,8 @@ pub use crate::handle::*;
 mod errors;
 pub use crate::errors::*;
 
+use futures::channel::mpsc::Receiver;
+use futures::channel::mpsc::Sender;
 pub use netlink_packet_audit as packet;
 use netlink_packet_core::NetlinkMessage;
 pub mod proto {
@@ -32,6 +34,23 @@ pub fn new_connection() -> io::Result<(
 }
 
 #[allow(clippy::type_complexity)]
+#[cfg(feature = "tokio_socket")]
+pub fn new_bounded_connection(
+    bound: usize,
+) -> io::Result<(
+    proto::Connection<
+        packet::AuditMessage,
+        sys::TokioSocket,
+        packet::NetlinkAuditCodec,
+        Sender<(NetlinkMessage<packet::AuditMessage>, sys::SocketAddr)>,
+    >,
+    Handle,
+    Receiver<(NetlinkMessage<packet::AuditMessage>, sys::SocketAddr)>,
+)> {
+    new_bounded_connection_with_socket(bound)
+}
+
+#[allow(clippy::type_complexity)]
 pub fn new_connection_with_socket<S>() -> io::Result<(
     proto::Connection<packet::AuditMessage, S, packet::NetlinkAuditCodec>,
     Handle,
@@ -43,5 +62,29 @@ where
     let (conn, handle, messages) = netlink_proto::new_connection_with_codec(
         sys::protocols::NETLINK_AUDIT,
     )?;
+    Ok((conn, Handle::new(handle), messages))
+}
+
+#[allow(clippy::type_complexity)]
+pub fn new_bounded_connection_with_socket<S>(
+    bound: usize,
+) -> io::Result<(
+    proto::Connection<
+        packet::AuditMessage,
+        S,
+        packet::NetlinkAuditCodec,
+        Sender<(NetlinkMessage<packet::AuditMessage>, sys::SocketAddr)>,
+    >,
+    Handle,
+    Receiver<(NetlinkMessage<packet::AuditMessage>, sys::SocketAddr)>,
+)>
+where
+    S: sys::AsyncSocket,
+{
+    let (conn, handle, messages) =
+        netlink_proto::new_bounded_connection_with_codec(
+            sys::protocols::NETLINK_AUDIT,
+            bound,
+        )?;
     Ok((conn, Handle::new(handle), messages))
 }
